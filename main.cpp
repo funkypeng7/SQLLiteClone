@@ -8,7 +8,7 @@
 
 int main(int argc, char *argv[])
 {
-    Table *table = new_table();
+    Table table = Table();
     InputBuffer input_buffer = InputBuffer();
     while (true)
     {
@@ -28,8 +28,8 @@ int main(int argc, char *argv[])
             }
         }
 
-        Statement statement;
-        switch (prepare_statement(input_buffer, &statement))
+        Statement statement = Statement(input_buffer);
+        switch (statement.prepareResult)
         {
         case (PREPARE_SUCCESS):
             break;
@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        switch (execute_statement(&statement, table))
+        switch (table.execute_statement(statement))
         {
         case (EXECUTE_SUCCESS):
             printf("Executed.\n");
