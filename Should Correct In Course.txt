@@ -1,0 +1,4 @@
+Issues with Let's build a simple database
+
+- Part 3, No reference to ExecuteResule till full diff
+- Part 3, No Reference to print_row till full diff

@@ -4,96 +4,26 @@
 #include <string>
 #include <string.h>
 
-#include "modules\repl.h"
-
-typedef enum
-{
-    META_COMMAND_SUCCESS,
-    META_COMMAND_UNRECOGNIZED_COMMAND
-} MetaCommandResult;
-
-MetaCommandResult do_meta_command(InputBuffer *input_buffer)
-{
-    if (strcmp(input_buffer->buffer, ".exit") == 0)
-    {
-        exit(EXIT_SUCCESS);
-    }
-    else
-    {
-        return META_COMMAND_UNRECOGNIZED_COMMAND;
-    }
-}
-
-typedef enum
-{
-    PREPARE_SUCCESS,
-    PREPARE_UNRECOGNIZED_STATEMENT
-} PrepareResult;
-
-typedef enum
-{
-    STATEMENT_INSERT,
-    STATEMENT_SELECT
-} StatementType;
-
-typedef struct
-{
-    StatementType type;
-} Statement;
-
-
-
-void close_input_buffer(InputBuffer *input_buffer)
-{
-    free(input_buffer);
-}
-
-PrepareResult prepare_statement(InputBuffer *input_buffer,
-                                Statement *statement)
-{
-    if (strncmp(input_buffer->buffer, "insert", 6) == 0)
-    {
-        statement->type = STATEMENT_INSERT;
-        return PREPARE_SUCCESS;
-    }
-    if (strcmp(input_buffer->buffer, "select") == 0)
-    {
-        statement->type = STATEMENT_SELECT;
-        return PREPARE_SUCCESS;
-    }
-
-    return PREPARE_UNRECOGNIZED_STATEMENT;
-}
-
-void execute_statement(Statement *statement)
-{
-    switch (statement->type)
-    {
-    case (STATEMENT_INSERT):
-        printf("This is where we would do an insert.\n");
-        break;
-    case (STATEMENT_SELECT):
-        printf("This is where we would do a select.\n");
-        break;
-    }
-}
+#include "modules\modules.hpp"
 
 int main(int argc, char *argv[])
 {
-    InputBuffer *input_buffer = new_input_buffer();
+    Table *table = new_table();
+    InputBuffer input_buffer = InputBuffer();
     while (true)
     {
         print_prompt();
-        read_input(input_buffer);
+        input_buffer.read_input();
 
-        if (input_buffer->buffer[0] == '.')
+
+        if (input_buffer.buffer[0] == '.')
         {
             switch (do_meta_command(input_buffer))
             {
             case (META_COMMAND_SUCCESS):
                 continue;
             case (META_COMMAND_UNRECOGNIZED_COMMAND):
-                printf("Unrecognized command '%s'\n", input_buffer->buffer);
+                printf("Unrecognized command '%s'\n", input_buffer.buffer);
                 continue;
             }
         }
@@ -105,11 +35,18 @@ int main(int argc, char *argv[])
             break;
         case (PREPARE_UNRECOGNIZED_STATEMENT):
             printf("Unrecognized keyword at start of '%s'.\n",
-                   input_buffer->buffer);
+                   input_buffer.buffer);
             continue;
         }
 
-        execute_statement(&statement);
-        printf("Executed.\n");
+        switch (execute_statement(&statement, table))
+        {
+        case (EXECUTE_SUCCESS):
+            printf("Executed.\n");
+            break;
+        case (EXECUTE_TABLE_FULL):
+            printf("Error: Table full.\n");
+            break;
+        }
     }
 }
