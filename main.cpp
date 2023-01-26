@@ -33,6 +33,9 @@ int main(int argc, char *argv[])
         {
         case (PREPARE_SUCCESS):
             break;
+        case (PREPARE_SYNTAX_ERROR):
+        	printf("Syntax error. Could not parse statement.\n");
+        	continue;
         case (PREPARE_UNRECOGNIZED_STATEMENT):
             printf("Unrecognized keyword at start of '%s'.\n",
                    input_buffer.buffer);
