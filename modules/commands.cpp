@@ -1,9 +1,10 @@
 #include "modules.hpp"
 
-MetaCommandResult do_meta_command(InputBuffer input_buffer)
+MetaCommandResult do_meta_command(InputBuffer input_buffer, Table table)
 {
     if (input_buffer.buffer.compare(".exit") == 0)
     {
+        table.db_close();
         exit(EXIT_SUCCESS);
     }
     else

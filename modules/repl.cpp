@@ -6,6 +6,12 @@
 
 #include "modules.hpp"
 
+InputBuffer::InputBuffer()
+{
+    buffer = "";
+    buffer_length = 0;
+    input_length = 0;
+}
 
 void InputBuffer::read_input()
 {
@@ -19,8 +25,6 @@ void InputBuffer::read_input()
         printf("Error reading input\n");
         exit(EXIT_FAILURE);
     }
-
-    
 }
 
-void  print_prompt() { printf("db > "); };
+void print_prompt() { printf("db > "); };
