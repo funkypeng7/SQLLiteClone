@@ -1,8 +1,10 @@
 #include "modules.hpp"
 
+Table::Table() {}
+
 Table::Table(const char *filename)
 {
-    pager = Pager(filename);
+    pager.connect_file(filename);
     num_rows = pager.file_length / ROW_SIZE;
 
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
@@ -46,15 +48,6 @@ void Table::db_close()
     }
 }
 
-void *Table::row_slot(uint32_t row_num)
-{
-    uint32_t page_num = row_num / ROWS_PER_PAGE;
-    void *page = pager.get_page(page_num);
-    uint32_t row_offset = row_num % ROWS_PER_PAGE;
-    uint32_t byte_offset = row_offset * ROW_SIZE;
-    return static_cast<char *>(page) + byte_offset;
-}
-
 ExecuteResult Table::execute_statement(Statement statement)
 {
     switch (statement.type)
@@ -73,7 +66,8 @@ ExecuteResult Table::execute_insert(Statement statement)
         return EXECUTE_TABLE_FULL;
     }
 
-    statement.row_to_insert.serialize_row(row_slot(num_rows));
+    char *slot = Cursor(*this, true).position();
+    statement.row_to_insert.serialize_row(slot);
     num_rows += 1;
 
     return EXECUTE_SUCCESS;
@@ -82,10 +76,13 @@ ExecuteResult Table::execute_insert(Statement statement)
 ExecuteResult Table::execute_select(Statement statement)
 {
     Row row;
-    for (uint32_t i = 0; i < num_rows; i++)
+    Cursor cursor = Cursor(*this, false);
+
+    while (!(cursor.end_of_table))
     {
-        row.deserialize_row(row_slot(i));
+        row.deserialize_row(cursor.position());
         row.print_row();
+        cursor.advance();
     }
     return EXECUTE_SUCCESS;
 }

@@ -1,11 +1,19 @@
 #include "modules.hpp"
 
-Pager::Pager() {}
+Pager::Pager()
+{
+    filename = "";
+    file_length = 0;
+    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
+    {
+        pages[i] = NULL;
+    }
+}
 
-Pager::Pager(const char *filenameIn)
+void Pager::connect_file(const char *filenameIn)
 {
     filename = filenameIn;
-    std::ifstream file(filename, std::ios::in | std::ios::binary);
+    std::ifstream file(filename, std::ios::in | std::ios::out | std::ios::binary);
 
     if (!file.is_open())
     {
@@ -13,8 +21,9 @@ Pager::Pager(const char *filenameIn)
         exit(EXIT_FAILURE);
     }
 
-    file_length = file.tellg();
-    printf("File length %d", file_length);
+    std::streampos fsize = file.tellg();
+    file.seekg(0, std::ios::end);
+    file_length = file.tellg() - fsize;
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
     {
         pages[i] = NULL;
@@ -22,7 +31,7 @@ Pager::Pager(const char *filenameIn)
     file.close();
 }
 
-void *Pager::get_page(uint32_t page_num)
+char *Pager::get_page(uint32_t page_num)
 {
     if (page_num > TABLE_MAX_PAGES)
     {
@@ -33,7 +42,7 @@ void *Pager::get_page(uint32_t page_num)
 
     if (pages[page_num] == NULL)
     {
-        char *page = "";
+        char *page = new char[PAGE_SIZE];
         // Cache miss. Allocate memory and load from file.
         uint32_t num_pages = file_length / PAGE_SIZE;
         // We might save a partial page at the end of the file
@@ -66,9 +75,9 @@ void Pager::flush(uint32_t page_num, uint32_t size)
         printf("Tried to flush null page\n");
         exit(EXIT_FAILURE);
     }
-    std::ofstream file(filename, std::ios::in | std::ios::binary);
+    std::ofstream file(filename, std::ios::out | std::ios::binary);
     file.seekp(page_num * PAGE_SIZE, std::ios::beg);
-    if (file.good())
+    if (!file.good())
     {
         printf("Error seeking: %d\n", errno);
         exit(EXIT_FAILURE);

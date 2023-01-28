@@ -70,7 +70,7 @@ public:
     char email[COLUMN_EMAIL_SIZE + 1];
 
     void print_row();
-    void serialize_row(void *destination);
+    void serialize_row(char *destination);
     void deserialize_row(void *source);
 };
 
@@ -89,8 +89,6 @@ public:
 
     ExecuteResult execute_statement(Table table);
 };
-
-#endif
 
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
 
@@ -116,9 +114,9 @@ public:
     char *pages[TABLE_MAX_PAGES];
 
     Pager();
-    Pager(const char *filenameIn);
+    void connect_file(const char *filenameIn);
 
-    void *get_page(uint32_t page_num);
+    char *get_page(uint32_t page_num);
     void flush(uint32_t page_num, uint32_t size);
 };
 
@@ -129,12 +127,27 @@ public:
     uint32_t num_rows;
     void *pages[TABLE_MAX_PAGES];
 
+    Table();
     Table(const char *filename);
 
     void db_close();
 
-    void *row_slot(uint32_t row_num);
+    char *row_slot(uint32_t row_num);
     ExecuteResult execute_statement(Statement statement);
     ExecuteResult execute_insert(Statement statement);
     ExecuteResult execute_select(Statement statement);
 };
+
+class Cursor
+{
+public:
+    Table table;
+    uint32_t row_num;
+    bool end_of_table; // Indicates a position one past the last element
+
+    Cursor(Table table, bool startAtEnd);
+    char *position();
+    void advance();
+};
+
+#endif

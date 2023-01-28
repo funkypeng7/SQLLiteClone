@@ -8,7 +8,13 @@
 
 int main(int argc, char *argv[])
 {
-    Table table = Table("main.db");
+    if (argc < 2)
+    {
+        printf("Must supply a database filename.\n");
+        exit(EXIT_FAILURE);
+    }
+    char *filename = argv[1];
+    Table table = Table(filename);
     InputBuffer input_buffer = InputBuffer();
     while (true)
     {

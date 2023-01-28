@@ -19,12 +19,6 @@ void InputBuffer::read_input()
     int bytes_read = buffer.length();
 
     buffer_length = bytes_read;
-
-    if (bytes_read <= 0)
-    {
-        printf("Error reading input\n");
-        exit(EXIT_FAILURE);
-    }
 }
 
 void print_prompt() { printf("db > "); };
