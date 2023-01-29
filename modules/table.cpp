@@ -66,7 +66,7 @@ ExecuteResult Table::execute_insert(Statement statement)
         return EXECUTE_TABLE_FULL;
     }
 
-    char *slot = Cursor(*this, true).position();
+    char *slot = Cursor(this, true).position();
     statement.row_to_insert.serialize_row(slot);
     num_rows += 1;
 
@@ -76,7 +76,7 @@ ExecuteResult Table::execute_insert(Statement statement)
 ExecuteResult Table::execute_select(Statement statement)
 {
     Row row;
-    Cursor cursor = Cursor(*this, false);
+    Cursor cursor = Cursor(this, false);
 
     while (!(cursor.end_of_table))
     {

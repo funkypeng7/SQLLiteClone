@@ -141,11 +141,11 @@ public:
 class Cursor
 {
 public:
-    Table table;
+    Table *table;
     uint32_t row_num;
     bool end_of_table; // Indicates a position one past the last element
 
-    Cursor(Table table, bool startAtEnd);
+    Cursor(Table *table, bool startAtEnd);
     char *position();
     void advance();
 };
