@@ -5,37 +5,26 @@ Table::Table() {}
 Table::Table(const char *filename)
 {
     pager.connect_file(filename);
-    num_rows = pager.file_length / ROW_SIZE;
+    root_page_num = 0;
 
-    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
+    if (pager.num_pages == 0)
     {
-        pages[i] = NULL;
+        // New database file. Initialize page 0 as leaf node.
+        void *root_node = pager.get_page(0);
+        Cursor::initialize_leaf_node(root_node);
     }
 }
 
 void Table::db_close()
 {
-    uint32_t num_full_pages = num_rows / ROWS_PER_PAGE;
-    for (uint32_t i = 0; i < num_full_pages; i++)
+    for (uint32_t i = 0; i < pager.num_pages; i++)
     {
         if (pager.pages[i] == NULL)
         {
             continue;
         }
-        pager.flush(i, PAGE_SIZE);
+        pager.flush(i);
         pager.pages[i] = NULL;
-    }
-    // There may be a partial page to write to the end of the file
-    // This should not be needed after we switch to a B-tree
-    uint32_t num_additional_rows = num_rows % ROWS_PER_PAGE;
-    if (num_additional_rows > 0)
-    {
-        uint32_t page_num = num_full_pages;
-        if (pager.pages[page_num] != NULL)
-        {
-            pager.flush(page_num, num_additional_rows * ROW_SIZE);
-            pager.pages[page_num] = NULL;
-        }
     }
 
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
@@ -61,14 +50,14 @@ ExecuteResult Table::execute_statement(Statement statement)
 
 ExecuteResult Table::execute_insert(Statement statement)
 {
-    if (num_rows >= TABLE_MAX_ROWS)
+    char *node = pager.get_page(root_page_num);
+    if ((*Cursor::leaf_node_num_cells(node) >= LEAF_NODE_MAX_CELLS))
     {
         return EXECUTE_TABLE_FULL;
     }
-
-    char *slot = Cursor(this, true).position();
-    statement.row_to_insert.serialize_row(slot);
-    num_rows += 1;
+    Cursor cursor = Cursor(this, true);
+    char *slot = cursor.position();
+    cursor.leaf_node_insert(statement.row_to_insert.id, statement.row_to_insert);
 
     return EXECUTE_SUCCESS;
 }

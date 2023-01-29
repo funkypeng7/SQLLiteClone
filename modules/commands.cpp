@@ -1,5 +1,6 @@
 #include "modules.hpp"
 
+// TODO: make table method
 MetaCommandResult do_meta_command(InputBuffer input_buffer, Table table)
 {
     if (input_buffer.buffer.compare(".exit") == 0)
@@ -7,6 +8,19 @@ MetaCommandResult do_meta_command(InputBuffer input_buffer, Table table)
         table.db_close();
         exit(EXIT_SUCCESS);
     }
+    else if (input_buffer.buffer.compare(".constants") == 0)
+    {
+        printf("Constants:\n");
+        print_constants();
+        return META_COMMAND_SUCCESS;
+    }
+    else if (input_buffer.buffer.compare(".btree") == 0)
+    {
+        printf("Tree:\n");
+        Cursor::print_leaf_node(table.pager.get_page(0));
+        return META_COMMAND_SUCCESS;
+    }
+
     else
     {
         return META_COMMAND_UNRECOGNIZED_COMMAND;
@@ -38,4 +52,14 @@ Statement::Statement(InputBuffer input_buffer)
 
     prepareResult = PREPARE_UNRECOGNIZED_STATEMENT;
     return;
+}
+
+void print_constants()
+{
+    printf("ROW_SIZE: %d\n", ROW_SIZE);
+    printf("COMMON_NODE_HEADER_SIZE: %d\n", COMMON_NODE_HEADER_SIZE);
+    printf("LEAF_NODE_HEADER_SIZE: %d\n", LEAF_NODE_HEADER_SIZE);
+    printf("LEAF_NODE_CELL_SIZE: %d\n", LEAF_NODE_CELL_SIZE);
+    printf("LEAF_NODE_SPACE_FOR_CELLS: %d\n", LEAF_NODE_SPACE_FOR_CELLS);
+    printf("LEAF_NODE_MAX_CELLS: %d\n", LEAF_NODE_MAX_CELLS);
 }

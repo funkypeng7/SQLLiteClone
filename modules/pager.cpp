@@ -4,6 +4,7 @@ Pager::Pager()
 {
     filename = "";
     file_length = 0;
+    num_pages = 0;
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
     {
         pages[i] = NULL;
@@ -24,6 +25,14 @@ void Pager::connect_file(const char *filenameIn)
     std::streampos fsize = file.tellg();
     file.seekg(0, std::ios::end);
     file_length = file.tellg() - fsize;
+
+    num_pages = file_length / PAGE_SIZE;
+    if (file_length % PAGE_SIZE != 0)
+    {
+        printf("Db file is not a whole number of pages. Corrupt file.\n");
+        exit(EXIT_FAILURE);
+    }
+    
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
     {
         pages[i] = NULL;
@@ -55,20 +64,25 @@ char *Pager::get_page(uint32_t page_num)
             std::ifstream file(filename, std::ios::in | std::ios::binary);
             file.seekg(page_num * PAGE_SIZE, std::ios::beg);
             file.read(page, PAGE_SIZE);
-            ssize_t bytes_read = file.gcount();
+            std::streamsize bytes_read = file.gcount();
             file.close();
-            if (bytes_read == -1)
+            if (file.rdstate() & std::ifstream::failbit)
             {
                 printf("Error reading file: %d\n", errno);
                 exit(EXIT_FAILURE);
             }
         }
         pages[page_num] = page;
+
+        if (page_num >= num_pages)
+        {
+            num_pages = page_num + 1;
+        }
     }
     return pages[page_num];
 }
 
-void Pager::flush(uint32_t page_num, uint32_t size)
+void Pager::flush(uint32_t page_num)
 {
     if (pages[page_num] == NULL)
     {
@@ -82,7 +96,7 @@ void Pager::flush(uint32_t page_num, uint32_t size)
         printf("Error seeking: %d\n", errno);
         exit(EXIT_FAILURE);
     }
-    file.write(pages[page_num], size);
+    file.write(pages[page_num], PAGE_SIZE);
 
     if ((file.rdstate() & std::ofstream::failbit) != 0)
     {

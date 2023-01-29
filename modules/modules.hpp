@@ -35,6 +35,12 @@ enum StatementType
     STATEMENT_SELECT
 };
 
+enum NodyType
+{
+    NODE_INTERNAL,
+    NODE_LEAF
+};
+
 // Classes
 class InputBuffer;
 class Row;
@@ -103,51 +109,63 @@ const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 // Table and pager
 #define TABLE_MAX_PAGES 100
 const uint32_t PAGE_SIZE = 4096;
-const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
-const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
 class Pager
 {
 public:
     const char *filename;
     uint32_t file_length;
+    uint32_t num_pages;
     char *pages[TABLE_MAX_PAGES];
 
     Pager();
     void connect_file(const char *filenameIn);
 
     char *get_page(uint32_t page_num);
-    void flush(uint32_t page_num, uint32_t size);
+    void flush(uint32_t page_num);
 };
 
 class Table
 {
 public:
     Pager pager;
-    uint32_t num_rows;
-    void *pages[TABLE_MAX_PAGES];
+    uint32_t root_page_num;
 
     Table();
     Table(const char *filename);
 
     void db_close();
 
-    char *row_slot(uint32_t row_num);
     ExecuteResult execute_statement(Statement statement);
     ExecuteResult execute_insert(Statement statement);
     ExecuteResult execute_select(Statement statement);
 };
+extern const uint8_t COMMON_NODE_HEADER_SIZE;
+extern const uint32_t LEAF_NODE_HEADER_SIZE;
+extern const uint32_t LEAF_NODE_CELL_SIZE;
+extern const uint32_t LEAF_NODE_SPACE_FOR_CELLS;
+extern const uint32_t LEAF_NODE_MAX_CELLS;
 
 class Cursor
 {
 public:
     Table *table;
-    uint32_t row_num;
+    uint32_t page_num;
+    uint32_t cell_num;
     bool end_of_table; // Indicates a position one past the last element
 
     Cursor(Table *table, bool startAtEnd);
     char *position();
     void advance();
+    void leaf_node_insert(uint32_t key, Row value);
+
+    static char *leaf_node_num_cells(void *node);
+    static char *leaf_node_cell(void *node, uint32_t cell_num);
+    static char *leaf_node_key(void *node, uint32_t cell_num);
+    static char *leaf_node_value(void *node, uint32_t cell_num);
+    static void initialize_leaf_node(void *node);
+    static void print_leaf_node(void *node);
 };
 
+void print_constants();
 #endif
