@@ -124,6 +124,7 @@ public:
 
     char *get_page(uint32_t page_num);
     void flush(uint32_t page_num);
+    uint32_t get_unused_page_num();
 };
 
 class Table
@@ -140,6 +141,8 @@ public:
     ExecuteResult execute_statement(Statement statement);
     ExecuteResult execute_insert(Statement statement);
     ExecuteResult execute_select(Statement statement);
+
+    void create_new_root(uint32_t right_child_page_num);
 };
 extern const uint8_t COMMON_NODE_HEADER_SIZE;
 extern const uint32_t LEAF_NODE_HEADER_SIZE;
@@ -158,10 +161,12 @@ public:
     Cursor();
     Cursor(Table *table);
     static Cursor table_find(Table *table, uint32_t key);
+    static Cursor internal_node_find(Table *table, uint32_t page_num, uint32_t key);
     static Cursor leaf_node_find(Table *table, uint32_t page_num, uint32_t key);
     char *position();
     void advance();
     void leaf_node_insert(uint32_t key, Row value);
+    void leaf_node_split_and_insert(uint32_t key, Row value);
 
 
     // Todo: create node object
@@ -170,10 +175,22 @@ public:
     static char *leaf_node_key(void *node, uint32_t cell_num);
     static char *leaf_node_value(void *node, uint32_t cell_num);
     static void initialize_leaf_node(void *node);
-    static void print_leaf_node(void *node);
     static NodeType get_node_type(void *node);
     static void set_node_type(void * node, NodeType type);
-};
+
+    static void initialize_internal_node(void *node);
+    static uint32_t *internal_node_num_keys(void *node);
+    static uint32_t *internal_node_right_child(void *node);
+    static uint32_t *internal_node_cell(void *node, uint32_t cell_num);
+    static uint32_t *internal_node_child(void *node, uint32_t child_num);
+    static uint32_t *internal_node_key(void *node, uint32_t key_num);
+    static uint32_t get_node_max_key(void* node);
+    static bool is_node_root(void* node);
+    static void set_node_root(void* node, bool is_root);
+
+    
+    static void print_tree(Pager pager, uint32_t page_num, uint32_t indentation_level);
+};;
 
 void print_constants();
 #endif

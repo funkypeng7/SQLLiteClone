@@ -110,3 +110,9 @@ void Pager::flush(uint32_t page_num)
         exit(EXIT_FAILURE);
     }
 }
+
+/*
+Until we start recycling free pages, new pages will always
+go onto the end of the database file
+*/
+uint32_t Pager::get_unused_page_num() { return num_pages; }

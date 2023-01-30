@@ -17,7 +17,7 @@ MetaCommandResult do_meta_command(InputBuffer input_buffer, Table table)
     else if (input_buffer.buffer.compare(".btree") == 0)
     {
         printf("Tree:\n");
-        Cursor::print_leaf_node(table.pager.get_page(0));
+        Cursor::print_tree(table.pager, 0, 0);
         return META_COMMAND_SUCCESS;
     }
 
@@ -63,3 +63,4 @@ void print_constants()
     printf("LEAF_NODE_SPACE_FOR_CELLS: %d\n", LEAF_NODE_SPACE_FOR_CELLS);
     printf("LEAF_NODE_MAX_CELLS: %d\n", LEAF_NODE_MAX_CELLS);
 }
+
