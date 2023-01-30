@@ -13,7 +13,8 @@
 enum ExecuteResult
 {
     EXECUTE_SUCCESS,
-    EXECUTE_TABLE_FULL
+    EXECUTE_TABLE_FULL,
+    EXECUTE_DUPLICATE_KEY
 };
 
 enum MetaCommandResult
@@ -35,7 +36,7 @@ enum StatementType
     STATEMENT_SELECT
 };
 
-enum NodyType
+enum NodeType
 {
     NODE_INTERNAL,
     NODE_LEAF
@@ -154,17 +155,24 @@ public:
     uint32_t cell_num;
     bool end_of_table; // Indicates a position one past the last element
 
-    Cursor(Table *table, bool startAtEnd);
+    Cursor();
+    Cursor(Table *table);
+    static Cursor table_find(Table *table, uint32_t key);
+    static Cursor leaf_node_find(Table *table, uint32_t page_num, uint32_t key);
     char *position();
     void advance();
     void leaf_node_insert(uint32_t key, Row value);
 
+
+    // Todo: create node object
     static char *leaf_node_num_cells(void *node);
     static char *leaf_node_cell(void *node, uint32_t cell_num);
     static char *leaf_node_key(void *node, uint32_t cell_num);
     static char *leaf_node_value(void *node, uint32_t cell_num);
     static void initialize_leaf_node(void *node);
     static void print_leaf_node(void *node);
+    static NodeType get_node_type(void *node);
+    static void set_node_type(void * node, NodeType type);
 };
 
 void print_constants();

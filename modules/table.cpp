@@ -26,15 +26,6 @@ void Table::db_close()
         pager.flush(i);
         pager.pages[i] = NULL;
     }
-
-    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
-    {
-        void *page = pager.pages[i];
-        if (page)
-        {
-            pager.pages[i] = NULL;
-        }
-    }
 }
 
 ExecuteResult Table::execute_statement(Statement statement)
@@ -51,11 +42,23 @@ ExecuteResult Table::execute_statement(Statement statement)
 ExecuteResult Table::execute_insert(Statement statement)
 {
     char *node = pager.get_page(root_page_num);
-    if ((*Cursor::leaf_node_num_cells(node) >= LEAF_NODE_MAX_CELLS))
+    uint32_t num_cells = *Cursor::leaf_node_num_cells(node);
+    if (num_cells >= LEAF_NODE_MAX_CELLS)
     {
         return EXECUTE_TABLE_FULL;
     }
-    Cursor cursor = Cursor(this, true);
+    uint32_t key_to_insert = statement.row_to_insert.id;
+    Cursor cursor = Cursor::table_find(this, key_to_insert);
+
+    if (cursor.cell_num < num_cells)
+    {
+        uint32_t key_at_index = *Cursor::leaf_node_key(node, cursor.cell_num);
+        if (key_at_index == key_to_insert)
+        {
+            return EXECUTE_DUPLICATE_KEY;
+        }
+    }
+
     char *slot = cursor.position();
     cursor.leaf_node_insert(statement.row_to_insert.id, statement.row_to_insert);
 
@@ -65,7 +68,7 @@ ExecuteResult Table::execute_insert(Statement statement)
 ExecuteResult Table::execute_select(Statement statement)
 {
     Row row;
-    Cursor cursor = Cursor(this, false);
+    Cursor cursor = Cursor(this);
 
     while (!(cursor.end_of_table))
     {

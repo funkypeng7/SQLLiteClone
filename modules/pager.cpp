@@ -15,11 +15,17 @@ void Pager::connect_file(const char *filenameIn)
 {
     filename = filenameIn;
     std::ifstream file(filename, std::ios::in | std::ios::out | std::ios::binary);
-
     if (!file.is_open())
     {
-        printf("Unable to open file\n");
-        exit(EXIT_FAILURE);
+        std::ofstream fileOut(filename);
+        fileOut.close();
+
+        file.open(filename, std::ios::in | std::ios::out | std::ios::binary);
+        if (!file.is_open())
+        {
+            printf("Unable to open file.\n");
+            exit(EXIT_FAILURE);
+        }
     }
 
     std::streampos fsize = file.tellg();
@@ -32,7 +38,7 @@ void Pager::connect_file(const char *filenameIn)
         printf("Db file is not a whole number of pages. Corrupt file.\n");
         exit(EXIT_FAILURE);
     }
-    
+
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
     {
         pages[i] = NULL;
@@ -52,25 +58,25 @@ char *Pager::get_page(uint32_t page_num)
     if (pages[page_num] == NULL)
     {
         char *page = new char[PAGE_SIZE];
-        // Cache miss. Allocate memory and load from file.
-        uint32_t num_pages = file_length / PAGE_SIZE;
-        // We might save a partial page at the end of the file
-        if (file_length % PAGE_SIZE)
-        {
-            num_pages += 1;
-        }
         if (page_num <= num_pages)
         {
             std::ifstream file(filename, std::ios::in | std::ios::binary);
+            if (!file.is_open())
+            {
+                printf("Unable to open file\n");
+                exit(EXIT_FAILURE);
+            }
+
             file.seekg(page_num * PAGE_SIZE, std::ios::beg);
+            if (!file.is_open())
+            {
+                printf("Unable to open file\n");
+                exit(EXIT_FAILURE);
+            }
+
             file.read(page, PAGE_SIZE);
             std::streamsize bytes_read = file.gcount();
             file.close();
-            if (file.rdstate() & std::ifstream::failbit)
-            {
-                printf("Error reading file: %d\n", errno);
-                exit(EXIT_FAILURE);
-            }
         }
         pages[page_num] = page;
 
