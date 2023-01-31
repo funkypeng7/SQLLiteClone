@@ -65,7 +65,7 @@ ExecuteResult Table::execute_insert(Statement statement)
 ExecuteResult Table::execute_select(Statement statement)
 {
     Row row;
-    Cursor cursor = Cursor(this);
+    Cursor cursor = Cursor::table_start(this);
 
     while (!(cursor.end_of_table))
     {
@@ -103,4 +103,6 @@ void Table::create_new_root(uint32_t right_child_page_num)
     uint32_t left_child_max_key = Cursor::get_node_max_key(left_child);
     *Cursor::internal_node_key(root, 0) = left_child_max_key;
     *Cursor::internal_node_right_child(root) = right_child_page_num;
+    *Cursor::node_parent(left_child) = root_page_num;
+    *Cursor::node_parent(right_child) = root_page_num;
 }

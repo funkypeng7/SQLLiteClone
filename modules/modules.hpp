@@ -159,38 +159,43 @@ public:
     bool end_of_table; // Indicates a position one past the last element
 
     Cursor();
-    Cursor(Table *table);
+    static Cursor table_start(Table *tableIn);
     static Cursor table_find(Table *table, uint32_t key);
     static Cursor internal_node_find(Table *table, uint32_t page_num, uint32_t key);
+    static uint32_t internal_node_find_child(void *node, uint32_t key);
     static Cursor leaf_node_find(Table *table, uint32_t page_num, uint32_t key);
     char *position();
     void advance();
     void leaf_node_insert(uint32_t key, Row value);
     void leaf_node_split_and_insert(uint32_t key, Row value);
 
-
     // Todo: create node object
     static char *leaf_node_num_cells(void *node);
     static char *leaf_node_cell(void *node, uint32_t cell_num);
     static char *leaf_node_key(void *node, uint32_t cell_num);
     static char *leaf_node_value(void *node, uint32_t cell_num);
+    static uint32_t *leaf_node_next_leaf(void *node);
     static void initialize_leaf_node(void *node);
     static NodeType get_node_type(void *node);
-    static void set_node_type(void * node, NodeType type);
+    static void set_node_type(void *node, NodeType type);
 
     static void initialize_internal_node(void *node);
+    static void internal_node_insert(Table *table, uint32_t parent_page_num,
+                                     uint32_t child_page_num);
     static uint32_t *internal_node_num_keys(void *node);
     static uint32_t *internal_node_right_child(void *node);
     static uint32_t *internal_node_cell(void *node, uint32_t cell_num);
     static uint32_t *internal_node_child(void *node, uint32_t child_num);
     static uint32_t *internal_node_key(void *node, uint32_t key_num);
-    static uint32_t get_node_max_key(void* node);
-    static bool is_node_root(void* node);
-    static void set_node_root(void* node, bool is_root);
+    static void update_internal_node_key(void *node, uint32_t old_key, uint32_t new_key);
+    static uint32_t *node_parent(void *node);
+    static uint32_t get_node_max_key(void *node);
+    static bool is_node_root(void *node);
+    static void set_node_root(void *node, bool is_root);
 
-    
     static void print_tree(Pager pager, uint32_t page_num, uint32_t indentation_level);
-};;
+};
+;
 
 void print_constants();
 #endif

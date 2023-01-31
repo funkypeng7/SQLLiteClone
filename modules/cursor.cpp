@@ -7,14 +7,14 @@ Cursor::Cursor()
     cell_num = 0;
 }
 
-Cursor::Cursor(Table *tableIn)
+Cursor Cursor::table_start(Table *tableIn)
 {
-    table = tableIn;
-    page_num = table->root_page_num;
-    void *root_node = table->pager.get_page(table->root_page_num);
-    uint32_t num_cells = *leaf_node_num_cells(root_node);
-    cell_num = 0;
-    end_of_table = (num_cells == 0);
+    Cursor cursor = Cursor::table_find(tableIn, 0);
+
+    void *node = tableIn->pager.get_page(cursor.page_num);
+    cursor.end_of_table = *leaf_node_num_cells(node) == 0;
+
+    return cursor;
 }
 
 Cursor Cursor::table_find(Table *table, uint32_t key)
@@ -32,12 +32,15 @@ Cursor Cursor::table_find(Table *table, uint32_t key)
     }
 }
 
-Cursor Cursor::internal_node_find(Table *table, uint32_t page_num, uint32_t key)
+uint32_t Cursor::internal_node_find_child(void *node, uint32_t key)
 {
-    void *node = table->pager.get_page(page_num);
+    /*
+    Return the index of the child which should contain
+    the given key.
+    */
     uint32_t num_keys = *internal_node_num_keys(node);
 
-    /* Binary search to find index of child to search */
+    /* Binary search */
     uint32_t min_index = 0;
     uint32_t max_index = num_keys; /* there is one more child than key */
 
@@ -55,7 +58,15 @@ Cursor Cursor::internal_node_find(Table *table, uint32_t page_num, uint32_t key)
         }
     }
 
-    uint32_t child_num = *internal_node_child(node, min_index);
+    return min_index;
+}
+
+Cursor Cursor::internal_node_find(Table *table, uint32_t page_num, uint32_t key)
+{
+    void *node = table->pager.get_page(page_num);
+
+    uint32_t child_index = internal_node_find_child(node, key);
+    uint32_t child_num = *internal_node_child(node, child_index);
     void *child = table->pager.get_page(child_num);
     switch (get_node_type(child))
     {
@@ -114,7 +125,18 @@ void Cursor::advance()
 
     if (cell_num >= *leaf_node_num_cells(node))
     {
-        end_of_table = true;
+        /* Advance to next leaf node */
+        uint32_t next_page_num = *leaf_node_next_leaf(node);
+        if (next_page_num == 0)
+        {
+            /* This was rightmost leaf */
+            end_of_table = true;
+        }
+        else
+        {
+            page_num = next_page_num;
+            cell_num = 0;
+        }
     }
 }
 
@@ -135,8 +157,12 @@ const uint8_t COMMON_NODE_HEADER_SIZE =
  */
 const uint32_t LEAF_NODE_NUM_CELLS_SIZE = sizeof(uint32_t);
 const uint32_t LEAF_NODE_NUM_CELLS_OFFSET = COMMON_NODE_HEADER_SIZE;
-const uint32_t LEAF_NODE_HEADER_SIZE =
-    COMMON_NODE_HEADER_SIZE + LEAF_NODE_NUM_CELLS_SIZE;
+const uint32_t LEAF_NODE_NEXT_LEAF_SIZE = sizeof(uint32_t);
+const uint32_t LEAF_NODE_NEXT_LEAF_OFFSET =
+    LEAF_NODE_NUM_CELLS_OFFSET + LEAF_NODE_NUM_CELLS_SIZE;
+const uint32_t LEAF_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE +
+                                       LEAF_NODE_NUM_CELLS_SIZE +
+                                       LEAF_NODE_NEXT_LEAF_SIZE;
 
 /*
  * Leaf Node Body Layout
@@ -207,6 +233,7 @@ void Cursor::initialize_leaf_node(void *node)
     set_node_type(node, NODE_LEAF);
     set_node_root(node, false);
     *leaf_node_num_cells(node) = 0;
+    *leaf_node_next_leaf(node) = 0;
 }
 
 NodeType Cursor::get_node_type(void *node)
@@ -220,6 +247,11 @@ void Cursor::set_node_type(void *node, NodeType type)
     *((uint8_t *)(static_cast<char *>(node) + NODE_TYPE_OFFSET)) = (uint8_t)type;
 }
 
+uint32_t *Cursor::leaf_node_next_leaf(void *node)
+{
+    return (uint32_t *)(static_cast<char *>(node) + LEAF_NODE_NEXT_LEAF_OFFSET);
+}
+
 void Cursor::leaf_node_split_and_insert(uint32_t key, Row value)
 {
     /*
@@ -229,9 +261,13 @@ void Cursor::leaf_node_split_and_insert(uint32_t key, Row value)
     */
 
     void *old_node = table->pager.get_page(page_num);
+    uint32_t old_max = get_node_max_key(old_node);
     uint32_t new_page_num = table->pager.get_unused_page_num();
     void *new_node = table->pager.get_page(new_page_num);
     initialize_leaf_node(new_node);
+    *node_parent(new_node) = *node_parent(old_node);
+    *leaf_node_next_leaf(new_node) = *leaf_node_next_leaf(old_node);
+    *leaf_node_next_leaf(old_node) = new_page_num;
 
     /*
     All existing keys plus new key should be divided
@@ -254,7 +290,8 @@ void Cursor::leaf_node_split_and_insert(uint32_t key, Row value)
 
         if (i == cell_num)
         {
-            value.serialize_row(destination);
+            value.serialize_row(leaf_node_value(destination_node, index_within_node));
+            *leaf_node_key(destination_node, index_within_node) = key;
         }
         else if (i > cell_num)
         {
@@ -272,12 +309,18 @@ void Cursor::leaf_node_split_and_insert(uint32_t key, Row value)
 
     if (is_node_root(old_node))
     {
-        return table->create_new_root(new_page_num);
+        table->create_new_root(new_page_num);
+        return;
     }
     else
     {
-        printf("Need to implement updating parent after split\n");
-        exit(EXIT_FAILURE);
+        uint32_t parent_page_num = *node_parent(old_node);
+        uint32_t new_max = get_node_max_key(old_node);
+        void *parent = table->pager.get_page(parent_page_num);
+
+        update_internal_node_key(parent, old_max, new_max);
+        internal_node_insert(table, parent_page_num, new_page_num);
+        return;
     }
 }
 
@@ -300,12 +343,60 @@ const uint32_t INTERNAL_NODE_KEY_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CHILD_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CELL_SIZE =
     INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE;
+/* Keep this small for testing */
+const uint32_t INTERNAL_NODE_MAX_CELLS = 3;
 
 void Cursor::initialize_internal_node(void *node)
 {
     set_node_type(node, NODE_INTERNAL);
     set_node_root(node, false);
     *internal_node_num_keys(node) = 0;
+}
+
+void Cursor::internal_node_insert(Table *table, uint32_t parent_page_num,
+                                  uint32_t child_page_num)
+{
+    /*
+    Add a new child/key pair to parent that corresponds to child
+    */
+
+    void *parent = table->pager.get_page(parent_page_num);
+    void *child = table->pager.get_page(child_page_num);
+    uint32_t child_max_key = get_node_max_key(child);
+    uint32_t index = internal_node_find_child(parent, child_max_key);
+
+    uint32_t original_num_keys = *internal_node_num_keys(parent);
+    *internal_node_num_keys(parent) = original_num_keys + 1;
+
+    if (original_num_keys >= INTERNAL_NODE_MAX_CELLS)
+    {
+        printf("Need to implement splitting internal node\n");
+        exit(EXIT_FAILURE);
+    }
+
+    uint32_t right_child_page_num = *internal_node_right_child(parent);
+    void *right_child = table->pager.get_page(right_child_page_num);
+
+    if (child_max_key > get_node_max_key(right_child))
+    {
+        /* Replace right child */
+        *internal_node_child(parent, original_num_keys) = right_child_page_num;
+        *internal_node_key(parent, original_num_keys) =
+            get_node_max_key(right_child);
+        *internal_node_right_child(parent) = child_page_num;
+    }
+    else
+    {
+        /* Make room for the new cell */
+        for (uint32_t i = original_num_keys; i > index; i--)
+        {
+            void *destination = internal_node_cell(parent, i);
+            void *source = internal_node_cell(parent, i - 1);
+            memcpy(destination, source, INTERNAL_NODE_CELL_SIZE);
+        }
+        *internal_node_child(parent, index) = child_page_num;
+        *internal_node_key(parent, index) = child_max_key;
+    }
 }
 
 uint32_t *Cursor::internal_node_num_keys(void *node)
@@ -343,8 +434,16 @@ uint32_t *Cursor::internal_node_child(void *node, uint32_t child_num)
 
 uint32_t *Cursor::internal_node_key(void *node, uint32_t key_num)
 {
-    return internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE;
+    return (uint32_t *)((void *)internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE);
 }
+
+void Cursor::update_internal_node_key(void *node, uint32_t old_key, uint32_t new_key)
+{
+    uint32_t old_child_index = internal_node_find_child(node, old_key);
+    *internal_node_key(node, old_child_index) = new_key;
+}
+
+uint32_t *Cursor::node_parent(void *node) { return (uint32_t *)(static_cast<char *>(node) + PARENT_POINTER_OFFSET); }
 
 uint32_t Cursor::get_node_max_key(void *node)
 {
