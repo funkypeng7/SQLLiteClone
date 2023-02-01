@@ -4,15 +4,16 @@ Table::Table() {}
 
 Table::Table(const char *filename)
 {
+    pager = Pager();
     pager.connect_file(filename);
     root_page_num = 0;
 
     if (pager.num_pages == 0)
     {
         // New database file. Initialize page 0 as leaf node.
-        void *root_node = pager.get_page(0);
-        Cursor::initialize_leaf_node(root_node);
-        Cursor::set_node_root(root_node, true);
+        LeafNode *root_node = new LeafNode();
+        root_node->is_root = true;
+        pager.set_node(0, root_node);
     }
 }
 
@@ -20,12 +21,12 @@ void Table::db_close()
 {
     for (uint32_t i = 0; i < pager.num_pages; i++)
     {
-        if (pager.pages[i] == NULL)
+        if (pager.nodes[i] == NULL)
         {
             continue;
         }
         pager.flush(i);
-        pager.pages[i] = NULL;
+        pager.nodes[i] = NULL;
     }
 }
 
@@ -42,21 +43,20 @@ ExecuteResult Table::execute_statement(Statement statement)
 
 ExecuteResult Table::execute_insert(Statement statement)
 {
-    char *node = pager.get_page(root_page_num);
-    uint32_t num_cells = *Cursor::leaf_node_num_cells(node);
+    LeafNode *node = pager.get_node<LeafNode>(root_page_num);
+    uint32_t num_cells = node->num_cells;
     uint32_t key_to_insert = statement.row_to_insert.id;
-    Cursor cursor = Cursor::table_find(this, key_to_insert);
+    Cursor cursor = Cursor(this);
+    cursor.table_find(key_to_insert);
 
     if (cursor.cell_num < num_cells)
     {
-        uint32_t key_at_index = *Cursor::leaf_node_key(node, cursor.cell_num);
+        uint32_t key_at_index = node->keys[cursor.cell_num];
         if (key_at_index == key_to_insert)
         {
             return EXECUTE_DUPLICATE_KEY;
         }
     }
-
-    char *slot = cursor.position();
     cursor.leaf_node_insert(statement.row_to_insert.id, statement.row_to_insert);
 
     return EXECUTE_SUCCESS;
@@ -64,13 +64,13 @@ ExecuteResult Table::execute_insert(Statement statement)
 
 ExecuteResult Table::execute_select(Statement statement)
 {
-    Row row;
+    Row *row;
     Cursor cursor = Cursor::table_start(this);
 
     while (!(cursor.end_of_table))
     {
-        row.deserialize_row(cursor.position());
-        row.print_row();
+        row = cursor.position();
+        row->print_row();
         cursor.advance();
     }
     return EXECUTE_SUCCESS;
@@ -86,23 +86,26 @@ void Table::create_new_root(uint32_t right_child_page_num)
     New root node points to two children.
     */
 
-    void *root = pager.get_page(root_page_num);
-    void *right_child = pager.get_page(right_child_page_num);
+    LeafNode *root = pager.get_node<LeafNode>(root_page_num);
+    LeafNode *right_child = pager.get_node<LeafNode>(right_child_page_num);
+
     uint32_t left_child_page_num = pager.get_unused_page_num();
-    void *left_child = pager.get_page(left_child_page_num);
 
     /* Left child has data copied from old root */
-    memcpy(left_child, root, PAGE_SIZE);
-    Cursor::set_node_root(left_child, false);
+    LeafNode *left_child = LeafNode::clone(root);
+    left_child->is_root = false;
+    pager.set_node(left_child_page_num, left_child);
 
     /* Root node is a new internal node with one key and two children */
-    Cursor::initialize_internal_node(root);
-    Cursor::set_node_root(root, true);
-    *Cursor::internal_node_num_keys(root) = 1;
-    *Cursor::internal_node_child(root, 0) = left_child_page_num;
-    uint32_t left_child_max_key = Cursor::get_node_max_key(left_child);
-    *Cursor::internal_node_key(root, 0) = left_child_max_key;
-    *Cursor::internal_node_right_child(root) = right_child_page_num;
-    *Cursor::node_parent(left_child) = root_page_num;
-    *Cursor::node_parent(right_child) = root_page_num;
+    InternalNode *new_root = new InternalNode();
+    new_root->is_root = true;
+    new_root->num_keys = 1;
+    new_root->children_page_nums[0] = left_child_page_num;
+    uint32_t left_child_max_key = left_child->get_max_key();
+    new_root->keys[0] = left_child_page_num;
+    new_root->right_child_page_num = right_child_page_num;
+    pager.set_node(root_page_num, new_root);
+
+    left_child->node_parent_page_num = root_page_num;
+    right_child->node_parent_page_num = root_page_num;
 }

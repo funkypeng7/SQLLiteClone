@@ -38,8 +38,9 @@ enum StatementType
 
 enum NodeType
 {
+    NODE_NOT_INITIALIZED,
     NODE_INTERNAL,
-    NODE_LEAF
+    NODE_LEAF,
 };
 
 // Classes
@@ -48,6 +49,10 @@ class Row;
 class Statement;
 class Pager;
 class Table;
+class Node;
+class NotInitializedNode;
+class LeafNode;
+class InternalNode;
 
 // Input Buffer / REPL
 
@@ -117,12 +122,14 @@ public:
     const char *filename;
     uint32_t file_length;
     uint32_t num_pages;
-    char *pages[TABLE_MAX_PAGES];
+    Node *nodes[TABLE_MAX_PAGES];
 
     Pager();
     void connect_file(const char *filenameIn);
 
-    char *get_page(uint32_t page_num);
+    void set_node(uint32_t page_num, Node *node);
+    template <class T>
+    T *get_node(uint32_t page_num);
     void flush(uint32_t page_num);
     uint32_t get_unused_page_num();
 };
@@ -144,11 +151,6 @@ public:
 
     void create_new_root(uint32_t right_child_page_num);
 };
-extern const uint8_t COMMON_NODE_HEADER_SIZE;
-extern const uint32_t LEAF_NODE_HEADER_SIZE;
-extern const uint32_t LEAF_NODE_CELL_SIZE;
-extern const uint32_t LEAF_NODE_SPACE_FOR_CELLS;
-extern const uint32_t LEAF_NODE_MAX_CELLS;
 
 class Cursor
 {
@@ -159,43 +161,88 @@ public:
     bool end_of_table; // Indicates a position one past the last element
 
     Cursor();
+    Cursor(Table *table);
+
     static Cursor table_start(Table *tableIn);
-    static Cursor table_find(Table *table, uint32_t key);
-    static Cursor internal_node_find(Table *table, uint32_t page_num, uint32_t key);
-    static uint32_t internal_node_find_child(void *node, uint32_t key);
-    static Cursor leaf_node_find(Table *table, uint32_t page_num, uint32_t key);
-    char *position();
+    Row *position();
     void advance();
+
+    void table_find(uint32_t key);
+    void leaf_node_find(uint32_t key);
+    void internal_node_find(uint32_t key);
+
     void leaf_node_insert(uint32_t key, Row value);
     void leaf_node_split_and_insert(uint32_t key, Row value);
 
-    // Todo: create node object
-    static char *leaf_node_num_cells(void *node);
-    static char *leaf_node_cell(void *node, uint32_t cell_num);
-    static char *leaf_node_key(void *node, uint32_t cell_num);
-    static char *leaf_node_value(void *node, uint32_t cell_num);
-    static uint32_t *leaf_node_next_leaf(void *node);
-    static void initialize_leaf_node(void *node);
-    static NodeType get_node_type(void *node);
-    static void set_node_type(void *node, NodeType type);
-
-    static void initialize_internal_node(void *node);
-    static void internal_node_insert(Table *table, uint32_t parent_page_num,
+    void internal_node_insert(uint32_t parent_page_num,
                                      uint32_t child_page_num);
-    static uint32_t *internal_node_num_keys(void *node);
-    static uint32_t *internal_node_right_child(void *node);
-    static uint32_t *internal_node_cell(void *node, uint32_t cell_num);
-    static uint32_t *internal_node_child(void *node, uint32_t child_num);
-    static uint32_t *internal_node_key(void *node, uint32_t key_num);
-    static void update_internal_node_key(void *node, uint32_t old_key, uint32_t new_key);
-    static uint32_t *node_parent(void *node);
-    static uint32_t get_node_max_key(void *node);
-    static bool is_node_root(void *node);
-    static void set_node_root(void *node, bool is_root);
 
     static void print_tree(Pager pager, uint32_t page_num, uint32_t indentation_level);
 };
-;
+
+extern const uint8_t COMMON_NODE_HEADER_SIZE;
+extern const uint32_t LEAF_NODE_HEADER_SIZE;
+extern const uint32_t LEAF_NODE_CELL_SIZE;
+extern const uint32_t LEAF_NODE_SPACE_FOR_CELLS;
+
+class Node
+{
+public:
+    NodeType type;
+    uint32_t node_parent_page_num;
+    bool is_root;
+
+    Node();
+};
+
+class NotInitializedNode : public Node
+{
+public:
+    NotInitializedNode();
+};
+
+#define LEAF_NODE_MAX_CELLS 13
+
+class LeafNode : public Node
+{
+public:
+    uint32_t num_cells;
+    uint32_t next_leaf_page_num;
+    uint32_t keys[LEAF_NODE_MAX_CELLS];
+    Row values[LEAF_NODE_MAX_CELLS];
+
+    LeafNode();
+    LeafNode(char *page); // deserialize
+    static LeafNode *clone(LeafNode *old_node);
+
+    uint32_t get_max_key();
+    void serialize();
+};
+
+/* Keep this small for testing */
+#define INTERNAL_NODE_MAX_CELLS 3
+
+class InternalNode : public Node
+{
+protected:
+public:
+    // Todo create class to cover uint32_t and name it PageNumber
+    uint32_t num_keys;
+    uint32_t right_child_page_num;
+    uint32_t keys[INTERNAL_NODE_MAX_CELLS];
+    uint32_t children_page_nums[INTERNAL_NODE_MAX_CELLS];
+
+    InternalNode();
+    InternalNode(char *page); // deserialize
+
+    uint32_t get_internal_node_child(uint32_t child_num);
+    void update_internal_node_key(uint32_t old_key, uint32_t new_key);
+    uint32_t find_child(uint32_t key);
+
+    uint32_t get_max_key();
+    void serialize();
+
+};
 
 void print_constants();
 #endif

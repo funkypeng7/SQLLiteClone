@@ -7,7 +7,7 @@ Pager::Pager()
     num_pages = 0;
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
     {
-        pages[i] = NULL;
+        nodes[i] = NULL;
     }
 }
 
@@ -41,21 +41,31 @@ void Pager::connect_file(const char *filenameIn)
 
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++)
     {
-        pages[i] = NULL;
+        nodes[i] = NULL;
     }
     file.close();
 }
 
-char *Pager::get_page(uint32_t page_num)
+void Pager::set_node(uint32_t page_num, Node *node)
 {
+    get_node<Node>(page_num);
+    delete nodes[page_num];
+    nodes[page_num] = node;
+}
+
+template <class T>
+T *Pager::get_node(uint32_t page_num)
+{
+    // Make sure the class T is an instance of Node
+    static_assert(std::is_base_of<Node, T>::value);
+
     if (page_num > TABLE_MAX_PAGES)
     {
         printf("Tried to fetch page number out of bounds. %d > %d\n", page_num,
                TABLE_MAX_PAGES);
         exit(EXIT_FAILURE);
     }
-
-    if (pages[page_num] == NULL)
+    if (nodes[page_num] == NULL)
     {
         char *page = new char[PAGE_SIZE];
         if (page_num <= num_pages)
@@ -78,37 +88,72 @@ char *Pager::get_page(uint32_t page_num)
             std::streamsize bytes_read = file.gcount();
             file.close();
         }
-        pages[page_num] = page;
+
+        // Work out type of page and create node
+        Node *node_to_return;
+
+        uint32_t raw_type = *(uint32_t*)page;
+        NodeType node_type = (NodeType)raw_type;
+        if(raw_type < 0 || raw_type > 2) node_type = NODE_NOT_INITIALIZED;
+
+        if (node_type == NODE_NOT_INITIALIZED && (typeid(T) == typeid(NotInitializedNode) || typeid(T) == typeid(Node)))
+        {
+            node_to_return = new NotInitializedNode();
+        }
+        else if (node_type == NODE_LEAF && (typeid(T) == typeid(LeafNode) || typeid(T) == typeid(Node)))
+        {
+            node_to_return = new LeafNode(page);
+        }
+        else if (node_type == NODE_INTERNAL && (typeid(T) == typeid(InternalNode) || typeid(T) == typeid(Node)))
+        {
+            node_to_return = new InternalNode(page);
+        }
+        else
+        {
+            throw std::runtime_error("Pager::get_page is requesting incorrect type of node");
+        }
+
+        nodes[page_num] = static_cast<Node *>(node_to_return);
 
         if (page_num >= num_pages)
         {
             num_pages = page_num + 1;
         }
     }
-    return pages[page_num];
-}
+
+    return static_cast<T *>(nodes[page_num]);
+};
+
+template Node *Pager::get_node<Node>(uint32_t);
+template NotInitializedNode *Pager::get_node<NotInitializedNode>(uint32_t);
+template LeafNode *Pager::get_node<LeafNode>(uint32_t);
+template InternalNode *Pager::get_node<InternalNode>(uint32_t);
 
 void Pager::flush(uint32_t page_num)
 {
-    if (pages[page_num] == NULL)
+    if (nodes[page_num] == NULL)
     {
         printf("Tried to flush null page\n");
         exit(EXIT_FAILURE);
     }
-    std::ofstream file(filename, std::ios::out | std::ios::binary);
-    file.seekp(page_num * PAGE_SIZE, std::ios::beg);
-    if (!file.good())
-    {
-        printf("Error seeking: %d\n", errno);
-        exit(EXIT_FAILURE);
-    }
-    file.write(pages[page_num], PAGE_SIZE);
 
-    if ((file.rdstate() & std::ofstream::failbit) != 0)
-    {
-        printf("Error writing: %d\n", errno);
-        exit(EXIT_FAILURE);
-    }
+    // std::ofstream file(filename, std::ios::out | std::ios::binary);
+    // file.seekp(page_num * PAGE_SIZE, std::ios::beg);
+    // if (!file.good())
+    // {
+    //     printf("Error seeking: %d\n", errno);
+    //     exit(EXIT_FAILURE);
+    // }
+    // file.write(pages[page_num], PAGE_SIZE);
+
+    // if ((file.rdstate() & std::ofstream::failbit) != 0)
+    // {
+    //     printf("Error writing: %d\n", errno);
+    //     exit(EXIT_FAILURE);
+    // }
+
+    delete nodes[page_num];
+    exit(EXIT_SUCCESS);
 }
 
 /*
