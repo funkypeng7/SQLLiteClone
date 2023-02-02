@@ -193,6 +193,9 @@ public:
     bool is_root;
 
     Node();
+    Node(char* page);
+
+    char *serialize_header();
 };
 
 class NotInitializedNode : public Node
@@ -213,10 +216,12 @@ public:
 
     LeafNode();
     LeafNode(char *page); // deserialize
+
+    char *serialize();
+
     static LeafNode *clone(LeafNode *old_node);
 
     uint32_t get_max_key();
-    void serialize();
 };
 
 /* Keep this small for testing */
@@ -224,24 +229,27 @@ public:
 
 class InternalNode : public Node
 {
-protected:
+private:
+    uint32_t children_page_nums[INTERNAL_NODE_MAX_CELLS];
 public:
     // Todo create class to cover uint32_t and name it PageNumber
     uint32_t num_keys;
     uint32_t right_child_page_num;
     uint32_t keys[INTERNAL_NODE_MAX_CELLS];
-    uint32_t children_page_nums[INTERNAL_NODE_MAX_CELLS];
 
     InternalNode();
     InternalNode(char *page); // deserialize
 
-    uint32_t get_internal_node_child(uint32_t child_num);
+    char* serialize();
+
     void update_internal_node_key(uint32_t old_key, uint32_t new_key);
-    uint32_t find_child(uint32_t key);
+
+    uint32_t find_child_page_num(uint32_t key);
+    uint32_t get_child_page_num(uint32_t child_num);
+    void set_child_page_num(uint32_t index, uint32_t child_page_num);
+
 
     uint32_t get_max_key();
-    void serialize();
-
 };
 
 void print_constants();

@@ -137,21 +137,36 @@ void Pager::flush(uint32_t page_num)
         exit(EXIT_FAILURE);
     }
 
-    // std::ofstream file(filename, std::ios::out | std::ios::binary);
-    // file.seekp(page_num * PAGE_SIZE, std::ios::beg);
-    // if (!file.good())
-    // {
-    //     printf("Error seeking: %d\n", errno);
-    //     exit(EXIT_FAILURE);
-    // }
-    // file.write(pages[page_num], PAGE_SIZE);
+    Node *node = get_node<Node>(page_num);
+    char *page;
+    switch (node->type) {
+        case NODE_LEAF:
+            page = static_cast<LeafNode*>(node)->serialize();
+            break;
+        case NODE_INTERNAL:
+            page = static_cast<InternalNode*>(node)->serialize();
+            break;
+        default:
+            printf("Cannot serialize blank node or not intilized node");
+            exit(EXIT_FAILURE);
+    }
 
-    // if ((file.rdstate() & std::ofstream::failbit) != 0)
-    // {
-    //     printf("Error writing: %d\n", errno);
-    //     exit(EXIT_FAILURE);
-    // }
+    std::ofstream file(filename, std::ios::out | std::ios::binary);
+    file.seekp(page_num * PAGE_SIZE, std::ios::beg);
+    if (!file.good())
+    {
+        printf("Error seeking: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+    file.write(page, PAGE_SIZE);
 
+    if ((file.rdstate() & std::ofstream::failbit) != 0)
+    {
+        printf("Error writing: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+
+    delete page;
     delete nodes[page_num];
     exit(EXIT_SUCCESS);
 }

@@ -12,8 +12,55 @@ LeafNode::LeafNode() : Node()
     }
 };
 
-LeafNode::LeafNode(char *page) : Node() {
-    // TODO
+
+/*
+ * Leaf Node Header Layout
+ */
+const uint32_t LEAF_NODE_NUM_CELLS_SIZE = sizeof(uint32_t);
+const uint32_t LEAF_NODE_NUM_CELLS_OFFSET = COMMON_NODE_HEADER_SIZE;
+const uint32_t LEAF_NODE_NEXT_LEAF_SIZE = sizeof(uint32_t);
+const uint32_t LEAF_NODE_NEXT_LEAF_OFFSET =
+    LEAF_NODE_NUM_CELLS_OFFSET + LEAF_NODE_NUM_CELLS_SIZE;
+const uint32_t LEAF_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE +
+                                       LEAF_NODE_NUM_CELLS_SIZE +
+                                       LEAF_NODE_NEXT_LEAF_SIZE;
+
+/*
+ * Leaf Node Body Layout
+ */
+const uint32_t LEAF_NODE_KEY_SIZE = sizeof(uint32_t);
+const uint32_t LEAF_NODE_KEY_OFFSET = 0;
+const uint32_t LEAF_NODE_VALUE_SIZE = ROW_SIZE;
+const uint32_t LEAF_NODE_VALUE_OFFSET =
+    LEAF_NODE_KEY_OFFSET + LEAF_NODE_KEY_SIZE;
+const uint32_t LEAF_NODE_CELL_SIZE = LEAF_NODE_KEY_SIZE + LEAF_NODE_VALUE_SIZE;
+const uint32_t LEAF_NODE_SPACE_FOR_CELLS = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
+
+LeafNode::LeafNode(char *page) : Node(page) {
+    memcpy(&num_cells, static_cast<char *>(page) + LEAF_NODE_NUM_CELLS_OFFSET, LEAF_NODE_NUM_CELLS_SIZE);
+    memcpy(&next_leaf_page_num, static_cast<char *>(page) + LEAF_NODE_NEXT_LEAF_OFFSET, LEAF_NODE_NEXT_LEAF_SIZE);
+    for (int i = 0; i < num_cells; i++)
+    {
+        uint32_t cell_offset = LEAF_NODE_HEADER_SIZE + LEAF_NODE_CELL_SIZE * i;
+        memcpy(&keys[i], static_cast<char *>(page) + cell_offset, LEAF_NODE_KEY_SIZE);
+        Row row;
+        row.deserialize_row(page + cell_offset + LEAF_NODE_VALUE_SIZE);
+        values[i] = row;
+    }
+}
+
+char *LeafNode::serialize()
+{
+    char *page = serialize_header();
+    strncpy(page + LEAF_NODE_NUM_CELLS_OFFSET, (char *)num_cells, LEAF_NODE_NUM_CELLS_SIZE);
+    strncpy(page + LEAF_NODE_NEXT_LEAF_OFFSET, (char *)next_leaf_page_num, LEAF_NODE_NEXT_LEAF_SIZE);
+    for (int i = 0; i < num_cells; i++)
+    {
+        uint32_t cell_offset = LEAF_NODE_HEADER_SIZE + LEAF_NODE_CELL_SIZE * i;
+        strncpy(page + cell_offset, (char *)keys[i], LEAF_NODE_KEY_SIZE);
+        values[i].serialize_row(page + cell_offset + LEAF_NODE_VALUE_SIZE);
+    }
+    return page;
 }
 
 LeafNode *LeafNode::clone(LeafNode *old_node)
@@ -38,48 +85,4 @@ uint32_t LeafNode::get_max_key()
     return keys[num_cells - 1];
 };
 
-void LeafNode::serialize(){};
 
-// void Cursor::initialize_leaf_node(void *node)
-// {
-//     set_node_type(node, NODE_LEAF);
-//     set_node_root(node, false);
-//     *leaf_node_num_cells(node) = 0;
-//     *leaf_node_next_leaf(node) = 0;
-// }
-
-// char *Cursor::leaf_node_num_cells(void *node)
-// {
-//     return static_cast<char *>(node) + LEAF_NODE_NUM_CELLS_OFFSET;
-// }
-
-// char *Cursor::leaf_node_cell(void *node, uint32_t cell_num)
-// {
-//     return static_cast<char *>(node) + LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE;
-// }
-
-// char *Cursor::leaf_node_key(void *node, uint32_t cell_num)
-// {
-//     return leaf_node_cell(node, cell_num);
-// }
-
-// char *Cursor::leaf_node_value(void *node, uint32_t cell_num)
-// {
-//     return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
-// }
-
-// uint32_t *Cursor::leaf_node_next_leaf(void *node)
-// {
-//     return (uint32_t *)(static_cast<char *>(node) + LEAF_NODE_NEXT_LEAF_OFFSET);
-// }
-
-// uint32_t Cursor::get_node_max_key(void *node)
-// {
-//     switch (get_node_type(node))
-//     {
-//     case NODE_INTERNAL:
-//         return *internal_node_key(node, *internal_node_num_keys(node) - 1);
-//     case NODE_LEAF:
-//         return *leaf_node_key(node, *leaf_node_num_cells(node) - 1);
-//     }
-// }

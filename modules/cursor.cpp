@@ -73,8 +73,8 @@ void Cursor::internal_node_find(uint32_t key)
 {
     InternalNode *node = table->pager.get_node<InternalNode>(page_num);
 
-    uint32_t child_index = node->find_child(key);
-    page_num = node->children_page_nums[child_index];
+    uint32_t child_index = node->find_child_page_num(key);
+    page_num = node->get_child_page_num(child_index);
 
     Node *child = table->pager.get_node<Node>(page_num);
     switch (child->type)
@@ -116,49 +116,6 @@ void Cursor::advance()
     }
 }
 
-// TODO: Translate all info to #define
-
-/*
- * Common Node Header Layout
- */
-const uint32_t NODE_TYPE_SIZE = sizeof(uint8_t);
-const uint32_t NODE_TYPE_OFFSET = 0;
-const uint32_t IS_ROOT_SIZE = sizeof(uint8_t);
-const uint32_t IS_ROOT_OFFSET = NODE_TYPE_SIZE;
-const uint32_t PARENT_POINTER_SIZE = sizeof(uint32_t);
-const uint32_t PARENT_POINTER_OFFSET = IS_ROOT_OFFSET + IS_ROOT_SIZE;
-const uint8_t COMMON_NODE_HEADER_SIZE =
-    NODE_TYPE_SIZE + IS_ROOT_SIZE + PARENT_POINTER_SIZE;
-
-/*
- * Leaf Node Header Layout
- */
-const uint32_t LEAF_NODE_NUM_CELLS_SIZE = sizeof(uint32_t);
-const uint32_t LEAF_NODE_NUM_CELLS_OFFSET = COMMON_NODE_HEADER_SIZE;
-const uint32_t LEAF_NODE_NEXT_LEAF_SIZE = sizeof(uint32_t);
-const uint32_t LEAF_NODE_NEXT_LEAF_OFFSET =
-    LEAF_NODE_NUM_CELLS_OFFSET + LEAF_NODE_NUM_CELLS_SIZE;
-const uint32_t LEAF_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE +
-                                       LEAF_NODE_NUM_CELLS_SIZE +
-                                       LEAF_NODE_NEXT_LEAF_SIZE;
-
-/*
- * Leaf Node Body Layout
- */
-const uint32_t LEAF_NODE_KEY_SIZE = sizeof(uint32_t);
-const uint32_t LEAF_NODE_KEY_OFFSET = 0;
-const uint32_t LEAF_NODE_VALUE_SIZE = ROW_SIZE;
-const uint32_t LEAF_NODE_VALUE_OFFSET =
-    LEAF_NODE_KEY_OFFSET + LEAF_NODE_KEY_SIZE;
-const uint32_t LEAF_NODE_CELL_SIZE = LEAF_NODE_KEY_SIZE + LEAF_NODE_VALUE_SIZE;
-const uint32_t LEAF_NODE_SPACE_FOR_CELLS = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
-// const uint32_t LEAF_NODE_MAX_CELLS =
-//     LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
-
-const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
-const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT =
-    (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
-
 void Cursor::leaf_node_insert(uint32_t key, Row row)
 {
     LeafNode *node = table->pager.get_node<LeafNode>(page_num);
@@ -184,6 +141,10 @@ void Cursor::leaf_node_insert(uint32_t key, Row row)
     node->values[cell_num] = row;
 }
 
+const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
+const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT =
+    (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
+
 void Cursor::leaf_node_split_and_insert(uint32_t key, Row row)
 {
     /*
@@ -198,10 +159,11 @@ void Cursor::leaf_node_split_and_insert(uint32_t key, Row row)
     uint32_t new_page_num = table->pager.get_unused_page_num();
     LeafNode *new_node = new LeafNode();
     new_node->node_parent_page_num = old_node->node_parent_page_num;
+
     new_node->next_leaf_page_num = old_node->next_leaf_page_num;
+    old_node->next_leaf_page_num = new_page_num;
 
     table->pager.set_node(new_page_num, new_node);
-    old_node->next_leaf_page_num = new_page_num;
 
     /*
     All existing keys plus new key should be divided
@@ -228,13 +190,13 @@ void Cursor::leaf_node_split_and_insert(uint32_t key, Row row)
         }
         else if (i > cell_num)
         {
-            destination_node->keys[index_within_node] = old_node->keys[index_within_node - 1];
-            destination_node->values[index_within_node] = old_node->values[index_within_node - 1];
+            destination_node->keys[index_within_node] = old_node->keys[i - 1];
+            destination_node->values[index_within_node] = old_node->values[i - 1];
         }
         else
         {
-            destination_node->keys[index_within_node] = old_node->keys[index_within_node];
-            destination_node->values[index_within_node] = old_node->values[index_within_node];
+            destination_node->keys[index_within_node] = old_node->keys[i];
+            destination_node->values[index_within_node] = old_node->values[i];
         }
     }
 
@@ -259,28 +221,6 @@ void Cursor::leaf_node_split_and_insert(uint32_t key, Row row)
     }
 }
 
-/*
- * Internal Node Header Layout
- */
-const uint32_t INTERNAL_NODE_NUM_KEYS_SIZE = sizeof(uint32_t);
-const uint32_t INTERNAL_NODE_NUM_KEYS_OFFSET = COMMON_NODE_HEADER_SIZE;
-const uint32_t INTERNAL_NODE_RIGHT_CHILD_SIZE = sizeof(uint32_t);
-const uint32_t INTERNAL_NODE_RIGHT_CHILD_OFFSET =
-    INTERNAL_NODE_NUM_KEYS_OFFSET + INTERNAL_NODE_NUM_KEYS_SIZE;
-const uint32_t INTERNAL_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE +
-                                           INTERNAL_NODE_NUM_KEYS_SIZE +
-                                           INTERNAL_NODE_RIGHT_CHILD_SIZE;
-
-/*
- * Internal Node Body Layout
- */
-const uint32_t INTERNAL_NODE_KEY_SIZE = sizeof(uint32_t);
-const uint32_t INTERNAL_NODE_CHILD_SIZE = sizeof(uint32_t);
-const uint32_t INTERNAL_NODE_CELL_SIZE =
-    INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE;
-/* Keep this small for testing */
-// const uint32_t INTERNAL_NODE_MAX_CELLS = 3;
-
 void Cursor::internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num)
 {
     /*
@@ -291,7 +231,7 @@ void Cursor::internal_node_insert(uint32_t parent_page_num, uint32_t child_page_
     LeafNode *child = table->pager.get_node<LeafNode>(child_page_num);
 
     uint32_t child_max_key = child->get_max_key();
-    uint32_t index = parent->find_child(child_max_key);
+    uint32_t index = parent->find_child_page_num(child_max_key);
 
     uint32_t original_num_keys = parent->num_keys;
     parent->num_keys = original_num_keys + 1;
@@ -309,7 +249,7 @@ void Cursor::internal_node_insert(uint32_t parent_page_num, uint32_t child_page_
     {
         /* Replace right child */
         parent->keys[original_num_keys] = right_child->get_max_key();
-        parent->children_page_nums[original_num_keys] = right_child_page_num;
+        parent->set_child_page_num(original_num_keys, right_child_page_num);
         parent->right_child_page_num = child_page_num;
     }
     else
@@ -318,10 +258,10 @@ void Cursor::internal_node_insert(uint32_t parent_page_num, uint32_t child_page_
         for (uint32_t i = original_num_keys; i > index; i--)
         {
             parent->keys[i] = parent->keys[i - 1];
-            parent->children_page_nums[i] = parent->children_page_nums[i - 1];
+            parent->set_child_page_num(i,parent->get_child_page_num(i - 1));
         }
         parent->keys[index] = child_max_key;
-        parent->children_page_nums[index] = child_page_num;
+        parent->set_child_page_num(index, child_page_num);
     }
 }
 
@@ -337,20 +277,15 @@ void Cursor::print_tree(Pager pager, uint32_t page_num, uint32_t indentation_lev
 {
     Node *node = pager.get_node<Node>(page_num);
     uint32_t num_keys;
-    switch (node->type)
-    {
-    case NODE_LEAF:
-        num_keys = static_cast<LeafNode *>(node)->num_cells;
-    case NODE_INTERNAL:
-        num_keys = static_cast<InternalNode *>(node)->num_keys;
-    }
-    uint32_t child;
+    uint32_t child_index;
 
     switch (node->type)
     {
     case (NODE_LEAF):
     {
         LeafNode *leafNode = static_cast<LeafNode *>(node);
+        num_keys = leafNode->num_cells;
+
         indent(indentation_level);
         printf("- leaf (size %d)\n", num_keys);
         for (uint32_t i = 0; i < num_keys; i++)
@@ -363,19 +298,20 @@ void Cursor::print_tree(Pager pager, uint32_t page_num, uint32_t indentation_lev
     case (NODE_INTERNAL):
     {
         InternalNode *internalNode = static_cast<InternalNode *>(node);
+        num_keys = internalNode->num_keys;
 
         indent(indentation_level);
         printf("- internal (size %d)\n", num_keys);
         for (uint32_t i = 0; i < num_keys; i++)
         {
-            child = internalNode->children_page_nums[i];
-            print_tree(pager, child, indentation_level + 1);
+            child_index = internalNode->get_child_page_num(i);
+            print_tree(pager, child_index, indentation_level + 1);
 
             indent(indentation_level + 1);
             printf("- key %d\n", internalNode->keys[i]);
         }
-        child = internalNode->right_child_page_num;
-        print_tree(pager, child, indentation_level + 1);
+        child_index = internalNode->right_child_page_num;
+        print_tree(pager, child_index, indentation_level + 1);
         break;
     }
     }

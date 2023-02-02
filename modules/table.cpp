@@ -100,9 +100,10 @@ void Table::create_new_root(uint32_t right_child_page_num)
     InternalNode *new_root = new InternalNode();
     new_root->is_root = true;
     new_root->num_keys = 1;
-    new_root->children_page_nums[0] = left_child_page_num;
     uint32_t left_child_max_key = left_child->get_max_key();
-    new_root->keys[0] = left_child_page_num;
+    new_root->keys[0] = left_child_max_key;
+    new_root->set_child_page_num(0, left_child_page_num);
+
     new_root->right_child_page_num = right_child_page_num;
     pager.set_node(root_page_num, new_root);
 

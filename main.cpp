@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
         Statement statement = Statement(input_buffer);
         switch (statement.prepareResult)
         {
-        case (PREPARE_SUCCESS):
+        case (PREPARE_SUCCESS):;
             break;
         case (PREPARE_SYNTAX_ERROR):
             printf("Syntax error. Could not parse statement.\n");
