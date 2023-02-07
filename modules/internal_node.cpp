@@ -48,13 +48,13 @@ InternalNode::InternalNode(char *page) : Node(page)
 char *InternalNode::serialize()
 {
     char *page = serialize_header();
-    strncpy(page + INTERNAL_NODE_NUM_KEYS_OFFSET, (char *)num_keys, INTERNAL_NODE_NUM_KEYS_SIZE);
-    strncpy(page + INTERNAL_NODE_RIGHT_CHILD_OFFSET, (char *)right_child_page_num, INTERNAL_NODE_RIGHT_CHILD_SIZE);
+    memcpy(static_cast<char *>(page) + INTERNAL_NODE_NUM_KEYS_OFFSET, &num_keys, INTERNAL_NODE_NUM_KEYS_SIZE);
+    memcpy(static_cast<char *>(page) + INTERNAL_NODE_RIGHT_CHILD_OFFSET, &right_child_page_num, INTERNAL_NODE_RIGHT_CHILD_SIZE);
     for (int i = 0; i < num_keys; i++)
     {
         uint32_t cell_offset = INTERNAL_NODE_HEADER_SIZE + INTERNAL_NODE_CELL_SIZE * i;
-        strncpy(page + cell_offset, (char *)keys[i], INTERNAL_NODE_KEY_SIZE);
-        strncpy(page + cell_offset + INTERNAL_NODE_KEY_SIZE, (char *)children_page_nums[i], INTERNAL_NODE_CHILD_SIZE);
+        memcpy(static_cast<char *>(page) + cell_offset, &keys[i], INTERNAL_NODE_KEY_SIZE);
+        memcpy(static_cast<char *>(page) + cell_offset + INTERNAL_NODE_KEY_SIZE, &children_page_nums[i], INTERNAL_NODE_CHILD_SIZE);
     }
     return page;
 }

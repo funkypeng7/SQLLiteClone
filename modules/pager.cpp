@@ -92,7 +92,7 @@ T *Pager::get_node(uint32_t page_num)
         // Work out type of page and create node
         Node *node_to_return;
 
-        uint32_t raw_type = *(uint32_t*)page;
+        uint32_t raw_type = *(uint8_t*)page;
         NodeType node_type = (NodeType)raw_type;
         if(raw_type < 0 || raw_type > 2) node_type = NODE_NOT_INITIALIZED;
 

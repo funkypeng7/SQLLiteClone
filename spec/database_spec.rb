@@ -5,13 +5,13 @@ describe "database" do
 
   def run_script(commands)
     raw_output = nil
-    IO.popen("./main test.db", "r+") do |pipe|
+    IO.popen("./main.exe test.db", "r+") do |pipe|
       commands.each do |command|
-        begin
+        # begin
           pipe.puts command
-        rescue Errno::EPIPE
-          break
-        end
+        # rescue Errno::EPIPE
+        #   break
+        # end
       end
 
       pipe.close_write
@@ -42,8 +42,7 @@ describe "database" do
     end
     script << ".exit"
     result = run_script(script)
-    expect(result.last(2)).to match_array([
-                                "db > Executed.",
+    expect(result.last(5)).to match_array([
                                 "db > Need to implement splitting internal node",
                               ])
   end
